@@ -34,12 +34,7 @@ class Settings(BaseSettings):
 
     ENABLE_RANDOM_CUSTOM_TEMPLATE: bool = True
     RANDOM_TEMPLATE_IDS: list[int] = [
-        355876562, 7585928876, 7023006756,
-        5522474073, 482706122, 799818229,
-        355876562, 922551766, 6488960520,
-        1475063146, 1811879982,
-        6355200889, 355876562, 6536791856,
-        355876562
+        355876562, 1179465466,
     ]
 
     ENABLE_DRAW_CUSTOM_TEMPLATE: bool = True
@@ -52,7 +47,7 @@ class Settings(BaseSettings):
     RE_CHARGE_SPEED_MAX: int = 7
 
     BOOSTS_BLACK_LIST: list[str] = ['invite3frens', 'INVITE_FRIENDS', 'TON_TRANSACTION', 'BOOST_CHANNEL', 'ACTIVITY_CHALLENGE', 'CONNECT_WALLET']
-    TASKS_TODO_LIST: list[str] = ["x:notcoin", "x:notpixel", "paint20pixels", "leagueBonusSilver", "leagueBonusGold", "leagueBonusPlatinum", "channel:notpixel_channel", "channel:notcoin"]
+    TASKS_TODO_LIST: list[str] = ["x:notcoin", "x:notpixel", "paint20pixels", "leagueBonusSilver", "leagueBonusGold", "leagueBonusPlatinum", "channel:notpixel_channel", "channel:notcoin", "boinkTask", "makePixelAvatar", "joinSquad"]
 
     USE_PROXY_FROM_FILE: bool = True
 

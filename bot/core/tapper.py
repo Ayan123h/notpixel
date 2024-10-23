@@ -30,6 +30,9 @@ import uuid
 import aiohttp
 import json
 
+# from centrifuge import (Client, CentrifugeError)
+# from .sockets import ClientEventLoggerHandler, SubscriptionEventLoggerHandler
+
 from .agents import generate_random_user_agent
 from .headers import headers, headers_notcoin, headers_socket, headers_image
 from .helper import format_duration
@@ -67,6 +70,7 @@ class Tapper:
         self.template_id_to_join = None
         self.mode = 'CUSTOM TEMPLATE'
         self.session_ug_dict = self.load_user_agents() or []
+        self.subscription_ready = asyncio.Event()
         headers['User-Agent'] = self.check_user_agent()
         headers_notcoin['User-Agent'] = headers['User-Agent']
 
@@ -290,26 +294,34 @@ class Tapper:
             await asyncio.sleep(delay=random.randint(3, 8))
 
     def is_night_time(self):
-        night_start = settings.NIGHT_TIME[0]
-        night_end = settings.NIGHT_TIME[1]
+        try:
+            night_start = int(settings.NIGHT_TIME[0])
+            night_end = int(settings.NIGHT_TIME[1])
 
-        # Get the current hour
-        current_hour = datetime.now().hour
+            # Get the current hour
+            current_hour = datetime.now().hour
 
-        if current_hour >= night_start or current_hour < night_end:
-            return True
+            if current_hour >= night_start or current_hour < night_end:
+                return True
 
-        return False
+            return False
+        except Exception as error:
+            self.error(f"Unknown error during checking night time: <light-yellow>{error}</light-yellow>")
+            return False
 
     def time_until_morning(self):
-        morning_time = datetime.now().replace(hour=settings.NIGHT_TIME[1], minute=0, second=0, microsecond=0)
+        try:
+            morning_time = datetime.now().replace(hour=int(settings.NIGHT_TIME[1]), minute=0, second=0, microsecond=0)
 
-        if datetime.now() >= morning_time:
-            morning_time += timedelta(days=1)
+            if datetime.now() >= morning_time:
+                morning_time += timedelta(days=1)
 
-        time_remaining = morning_time - datetime.now()
+            time_remaining = morning_time - datetime.now()
 
-        return time_remaining.total_seconds() / 60
+            return time_remaining.total_seconds() / 60
+        except Exception as error:
+            self.error(f"Unknown error during calculate time until morning: <light-yellow>{error}</light-yellow>")
+            return 0
 
     async def check_proxy(self, http_client: aiohttp.ClientSession, proxy: Proxy) -> None:
         try:
@@ -435,15 +447,18 @@ class Tapper:
     async def send_draw_request(self, http_client: aiohttp.ClientSession, update, template_id):
         pixelId, x, y, color = update
 
-        payload = {
-            "pixelId": int(pixelId),
-            "newColor": color
-        }
+        payload = {"pixelId": int(pixelId), "newColor": color}
+
+        json_string = json.dumps(payload, separators=(',', ':'))
+
+        draw_headers = deepcopy(headers)
+        draw_headers['Content-Length'] = str(len(json_string))
 
         draw_request = await http_client.post(
             'https://notpx.app/api/v1/repaint/start',
             json=payload,
-            ssl=settings.ENABLE_SSL
+            ssl=settings.ENABLE_SSL,
+#             headers=draw_headers
         )
 
         draw_request.raise_for_status()
@@ -455,9 +470,9 @@ class Tapper:
         self.current_user_balance = new_balance
 
         if template_id:
-            self.success(f" <cyan>[{self.mode}]</cyan> Painted (X: <cyan>{x}</cyan>, Y: <cyan>{y}</cyan>) with color <light-blue>{color}</light-blue> 🎨️ | Balance <light-green>{'{:,.3f}'.format(self.current_user_balance)}</light-green> <magenta>(+{added_points} pix)</magenta> 🔳 | Template <cyan>{template_id}</cyan>")
+            self.success(f"<cyan>[{self.mode}]</cyan> Painted (X: <cyan>{x}</cyan>, Y: <cyan>{y}</cyan>) with color <light-blue>{color}</light-blue> 🎨️ | Balance <light-green>{'{:,.3f}'.format(self.current_user_balance)}</light-green> <magenta>(+{added_points} pix)</magenta> 🔳 | Template <cyan>{template_id}</cyan>")
         else:
-            self.success(f" <cyan>[{self.mode}]</cyan> Painted (X: <cyan>{x}</cyan>, Y: <cyan>{y}</cyan>) with color <light-blue>{color}</light-blue> 🎨️ | Balance <light-green>{'{:,.3f}'.format(self.current_user_balance)}</light-green> <magenta>(+{added_points} pix)</magenta> 🔳")
+            self.success(f"<cyan>[{self.mode}]</cyan> Painted (X: <cyan>{x}</cyan>, Y: <cyan>{y}</cyan>) with color <light-blue>{color}</light-blue> 🎨️ | Balance <light-green>{'{:,.3f}'.format(self.current_user_balance)}</light-green> <magenta>(+{added_points} pix)</magenta> 🔳")
 
     def check_timeout_error(self, error):
          try:
@@ -498,6 +513,7 @@ class Tapper:
                         self.error(f"Unknown error during subscribe to template.")
                     await asyncio.sleep(delay=random.randint(3, 5))
                     return False
+        return False
     async def get_user_current_template(self, http_client: aiohttp.ClientSession):
         for _ in range(3):
             try:
@@ -744,7 +760,8 @@ class Tapper:
 
                             if updated_image_hex_color != image_hex_color:
                                 charges = charges - 1
-                                pixelId = int(f'{curr_start_x + curr_x}{curr_start_y + curr_y}')+1
+                                pixelId = int(f'{curr_start_y + curr_y}{curr_start_x + curr_x}')+1
+
                                 await self.send_draw_request(http_client=http_client, update=(pixelId, curr_start_x + curr_x, curr_start_y + curr_y, image_hex_color.upper()), template_id=curr_template_id)
                                 await asyncio.sleep(delay=random.randint(4, 8))
                             else:
@@ -843,7 +860,7 @@ class Tapper:
                 self.info(f"Boosts Levels: Energy Limit - <cyan>{boosts['energyLimit']}</cyan> ⚡️| Paint Reward - <light-green>{boosts['paintReward']}</light-green> 🔳 | Recharge Speed - <magenta>{boosts['reChargeSpeed']}</magenta> 🚀")
 
                 if boosts['energyLimit'] >= settings.ENERGY_LIMIT_MAX and boosts['paintReward'] >= settings.PAINT_REWARD_MAX and boosts['reChargeSpeed'] >= settings.RE_CHARGE_SPEED_MAX:
-                    return
+                    return None
 
                 for name, level in sorted(boosts.items(), key=lambda item: item[1]):
                     if name == 'energyLimit' and level >= settings.ENERGY_LIMIT_MAX:
@@ -868,7 +885,7 @@ class Tapper:
                             self.warning(f"Not enough money to keep upgrading. 💰")
 
                             await asyncio.sleep(delay=random.randint(5, 10))
-                            return
+                            return None
 
         except Exception as error:
             if self.check_timeout_error(error) or self.check_error(error, "Service Unavailable"):
@@ -986,31 +1003,23 @@ class Tapper:
                 else:
                     break
 
-            return response_json['claimed']
+            return response_json.get('claimed', 0)
         except Exception as error:
             if self.check_timeout_error(error) or self.check_error(error, "Service Unavailable"):
                 self.warning(f"Warning during claiming reward: <magenta>Notpixel</magenta> server is not response.")
             else:
                 self.error(f"Unknown error during claiming reward: <light-yellow>{error}</light-yellow>")
             await asyncio.sleep(delay=3)
-
-    async def get_my_template(self, http_client: aiohttp.ClientSession):
-        try:
-            stats_req = await http_client.get(f'https://notpx.app/api/v1/image/template/my')
-            stats_req.raise_for_status()
-            cur_template = await stats_req.json()
-            cur_template = cur_template["id"]
-            return cur_template
-        except Exception as error:
             return 0
 
     async def check_join_template(self, http_client: aiohttp.ClientSession):
         try:
             my_template = await self.get_user_current_template(http_client)
-            self.template_id_to_join = await template_to_join(my_template['id'])
+            self.template_id_to_join = await template_to_join(my_template['id'], times_to_fall=20, session_name=self.session_name)
             return str(my_template['id']) != self.template_id_to_join
         except Exception as error:
-            pass
+            self.error(f"Unknown error during check joining template: <light-yellow>{error}</light-yellow>")
+            return False
         return False
 
     async def join_squad(self, http_client=aiohttp.ClientSession, user={}):
@@ -1095,8 +1104,64 @@ class Tapper:
         sec_websocket_key = base64.b64encode(random_bytes).decode('utf-8')
         return sec_websocket_key
 
+
+    async def send_null_bytes(self):
+        # Цикл отправки нулевых байт с интервалом
+        while True:
+            try:
+                # Отправляем бинарные данные с нулевыми байтами
+                await self.socket.send_bytes(b'\x00')
+                print("Отправлены нулевые байты")
+            except Exception as e:
+                print(f"Ошибка при отправке нулевых байт: {e}")
+                break
+            # Ждем 10 секунд перед следующей отправкой (можно настроить интервал)
+            await asyncio.sleep(10)
+
+    async def get_client_token(self, http_client: aiohttp.ClientSession):
+        curr_user = await self.get_user_info(http_client=http_client, show_error_message=False)
+        ws_token = curr_user.get('websocketToken', None)
+        return ws_token
+
+#     async def create_socket_connection(self, http_client: aiohttp.ClientSession):
+#         async def get_client_token():
+#             curr_user = await self.get_user_info(http_client=http_client, show_error_message=False)
+#             ws_token = curr_user.get('websocketToken', None)
+#             return ws_token
+#
+#         curr_token = await get_client_token()
+#         client = Client(
+#             "wss://notpx.app/connection/websocket",
+#             events=ClientEventLoggerHandler(),
+#             token=curr_token,
+#             get_token=get_client_token,
+#             use_protobuf=True,
+#         )
+#
+#         sub = client.new_subscription(
+#             "pixel:message",
+#             token=curr_token,
+#             get_token=get_client_token,
+#         )
+#
+#         try:
+#             await client.connect()
+#             self.info("Connected to WebSocket.")
+#         except CentrifugeError as e:
+#             self.error(f"Connection error: {e}")
+#             return
+#
+#         try:
+#             await sub.subscribe()
+#             self.info("Subscribed to channel.")
+#         except CentrifugeError as e:
+#             self.error(f"Subscription error: {e}")
+#             return
+#
+#         return None
+
     async def create_socket_connection(self, http_client: aiohttp.ClientSession):
-        uri = "wss://notpx.app/connection/websocket"
+        uri = "wss://notpx.app/api/v2/image/ws"
 
         curr_user = await self.get_user_info(http_client=http_client, show_error_message=False)
 
@@ -1208,16 +1273,15 @@ class Tapper:
                         await self.join_squad(http_client=http_client, user=user)
                         await asyncio.sleep(delay=random.randint(2, 5))
 
-                    await inform(self.user_id, current_balance, self.session_name)
-
-                    if settings.ENABLE_AUTO_DRAW:
-                        if settings.ENABLE_SERVER_MODE:
+                    if settings.ENABLE_AUTO_DRAW == True:
+                        if settings.ENABLE_SERVER_MODE == True:
+                            await inform(self.user_id, current_balance, times_to_fall=20, session_name=self.session_name)
                             check = await self.check_join_template(http_client=http_client)
                             if check:
                                 await asyncio.sleep(delay=random.randint(4, 10))
                                 is_successfully_subscribed = await self.subscribe_to_template(http_client=http_client, template_id=self.template_id_to_join)
                                 if is_successfully_subscribed:
-                                    self.success(f"Successfully subscribed to the template <cyan>[{self.mode}]</cyan> | ID: <cyan>{self.template_id_to_join}</cyan>")
+                                    self.success(f"<cyan>[{self.mode}]</cyan> Successfully subscribed to the template | ID: <cyan>{self.template_id_to_join}</cyan>")
                                     await asyncio.sleep(delay=random.randint(4, 10))
                                 else:
                                     delay = random.randint(60, 120)
@@ -1225,7 +1289,7 @@ class Tapper:
                                     await asyncio.sleep(delay=delay)
                                     token_live_time = 0
                                     continue
-                            await self.draw_server_mode(http_client=http_client)
+                            await self.draw_server_mode(http_client=http_client, retries=20)
                         else:
                             self.template_info = {
                                 'x': 244,
@@ -1235,12 +1299,12 @@ class Tapper:
                                 'id': "Durov",
                             }
 
-                            if not self.custom_template_id and settings.ENABLE_RANDOM_CUSTOM_TEMPLATE and len(settings.RANDOM_TEMPLATE_IDS) > 0:
+                            if not self.custom_template_id and settings.ENABLE_RANDOM_CUSTOM_TEMPLATE == True and len(settings.RANDOM_TEMPLATE_IDS) > 0:
                                 self.custom_template_id = random.choice(settings.RANDOM_TEMPLATE_IDS)
                             elif settings.CUSTOM_TEMPLATE_ID:
                                 self.custom_template_id = settings.CUSTOM_TEMPLATE_ID
 
-                            if (settings.ENABLE_DRAW_CUSTOM_TEMPLATE or settings.ENABLE_RANDOM_CUSTOM_TEMPLATE) and self.custom_template_id:
+                            if (settings.ENABLE_DRAW_CUSTOM_TEMPLATE == True or settings.ENABLE_RANDOM_CUSTOM_TEMPLATE == True) and self.custom_template_id:
                                 curr_user_template = await self.get_user_current_template(http_client=http_client)
                                 await asyncio.sleep(delay=random.randint(3, 6))
                                 is_successfully_subscribed = True
@@ -1249,6 +1313,7 @@ class Tapper:
                                     if is_successfully_subscribed:
                                         self.success(f"Successfully subscribed to the template | ID: <cyan>{self.custom_template_id}</cyan>")
                                     await asyncio.sleep(delay=random.randint(4, 10))
+
                                 if is_successfully_subscribed:
                                     template_info_data = await self.get_template_info(http_client=http_client, template_id=self.custom_template_id)
                                     if template_info_data:
@@ -1275,9 +1340,10 @@ class Tapper:
                                 await asyncio.sleep(delay=random.randint(4, 8))
 
                             if self.template_info['image']:
-                                if settings.ENABLE_SOCKETS:
+                                if settings.ENABLE_SOCKETS == True:
                                     self.socket = await self.create_socket_connection(http_client=http_client)
-                                    await asyncio.sleep(delay=random.randint(2, 10))
+                                    await asyncio.sleep(delay=random.randint(200, 1000))
+                                    return None
 
                                 if self.socket:
                                     await self.draw_template_socket(http_client=http_client, template_info=self.template_info)
@@ -1285,24 +1351,21 @@ class Tapper:
                                     await self.draw_template(http_client=http_client, template_info=self.template_info)
                             await asyncio.sleep(delay=random.randint(2, 5))
 
-                    if settings.ENABLE_AUTO_UPGRADE:
-                        status = await self.upgrade(http_client=http_client)
-                        if status is not None:
-                            self.info(f"Claim reward: <light-green>{status}</light-green> ✔️")
+                    if settings.ENABLE_AUTO_UPGRADE == True:
+                        await self.upgrade(http_client=http_client)
                         await asyncio.sleep(delay=random.randint(2, 5))
 
-                    if settings.ENABLE_CLAIM_REWARD:
+                    if settings.ENABLE_CLAIM_REWARD == True:
                         reward = await self.claim_mine(http_client=http_client)
-                        if reward is not None:
+                        if reward is not None and reward != 0:
                             self.info(f"Claim reward: <light-green>{'{:,.3f}'.format(reward)}</light-green> 🔳")
                         await asyncio.sleep(delay=random.randint(2, 5))
 
-                    if settings.ENABLE_AUTO_TASKS:
+                    if settings.ENABLE_AUTO_TASKS == True:
                         await self.run_tasks(http_client=http_client)
                         await asyncio.sleep(delay=random.randint(2, 5))
 
-                sleep_time = random.randint(settings.SLEEP_TIME_IN_MINUTES[0], settings.SLEEP_TIME_IN_MINUTES[1])
-
+                sleep_time = random.randint(int(settings.SLEEP_TIME_IN_MINUTES[0]), int(settings.SLEEP_TIME_IN_MINUTES[1]))
                 is_night = False
 
                 if settings.DISABLE_IN_NIGHT:
@@ -1312,7 +1375,7 @@ class Tapper:
                     sleep_time = self.time_until_morning()
 
                 if is_night:
-                    self.info(f"sleep {int(sleep_time)} minutes to the morning ({settings.NIGHT_TIME[1]} hours) 💤")
+                    self.info(f"sleep {int(sleep_time)} minutes to the morning (to {int(settings.NIGHT_TIME[1])} am hours) 💤")
                 else:
                     self.info(f"sleep {int(sleep_time)} minutes between cycles 💤")
 
@@ -1326,6 +1389,7 @@ class Tapper:
 
             except Exception as error:
                 self.error(f"Unknown error: <light-yellow>{error}</light-yellow>")
+                await asyncio.sleep(delay=random.randint(5, 10))
 
 async def run_tapper(tg_client: Client, proxy: str | None):
     try:
