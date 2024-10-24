@@ -1,1 +1,1 @@
-brd.superproxy.io:22225:brd-customer-hl_b1848315-zone-isp:7c0eiqp6m434
+ip.nimbleway.com:7000:account-pieper_ag_4tfu3a-pipeline-nimbleip:Q4L6u3P00W0J
