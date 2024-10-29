@@ -28,14 +28,15 @@ My other bots:
 💩Boinkers - https://github.com/YarmolenkoD/boinkers
 🚀Moonbix - https://github.com/YarmolenkoD/moonbix [GAME IS NOT WORKING]
 
-NEW ENV VARIABLES TO GET MORE +12 POINTS:
+Have you seen the new perspective PAWS project yet ? 🐾
 
-ENABLE_SERVER_MODE=True (Default = True) (WORK ONLY WITH FEW HARDCODED TEMPLATES)
+Use my ref to support me: https://t.me/PAWSOG_bot/PAWS?startapp=xDZm2M3t
 
 Select an action:
 
     1. Start drawing 🎨️
     2. Create a session 👨‍🎨
+    3. Get actual templates list 🖼
 
 """
 
@@ -102,8 +103,8 @@ async def process() -> None:
 
             if not action.isdigit():
                 logger.warning("Action must be number")
-            elif action not in ["1", "2"]:
-                logger.warning("Action must be 1 or 2")
+            elif action not in ["1", "2", "3"]:
+                logger.warning("Action must be 1, 2 or 3")
             else:
                 action = int(action)
                 break
@@ -115,6 +116,13 @@ async def process() -> None:
 
     elif action == 2:
         await register_sessions()
+
+    elif action == 3:
+        settings.SHOW_TEMPLATES_LIST = True
+
+        tg_clients = await get_tg_clients()
+
+        await run_tasks(tg_clients=[tg_clients[0]])
 
 async def run_tasks(tg_clients: list[Client]):
     proxies = get_proxies()

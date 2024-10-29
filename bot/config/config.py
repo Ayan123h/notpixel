@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     ENABLE_AUTO_JOIN_TO_SQUAD_CHANNEL: bool = False
     ENABLE_AUTO_JOIN_TO_SQUAD: bool = True
-    SQUAD_SLUG: str = 'notpixel_raiders'
+    SQUAD_SLUG: str = "notpixel_raiders"
 
     DISABLE_IN_NIGHT: bool = False
     NIGHT_TIME: list[int] = [23, 6]
@@ -34,7 +34,9 @@ class Settings(BaseSettings):
 
     ENABLE_RANDOM_CUSTOM_TEMPLATE: bool = True
     RANDOM_TEMPLATE_IDS: list[int] = [
-        355876562, 1179465466,
+        6103707977, 1479673219, 1041243367, 2087855212,
+        2100761925, 508528154, 474917422, 7151956877,
+        5098860372, 751725586
     ]
 
     ENABLE_DRAW_CUSTOM_TEMPLATE: bool = True
@@ -51,7 +53,8 @@ class Settings(BaseSettings):
 
     USE_PROXY_FROM_FILE: bool = True
 
-
+    SHOW_TEMPLATES_LIST: bool = False # DON'T TOUCH IT
+    OPEN_TEMPLATES_LIST_IN_BROWSER: bool = True
 
     # ------ LEGACY CONFIGURATIONS ------
     ENABLE_DRAW_ART: bool = False
