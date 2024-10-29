@@ -1,1 +1,10 @@
-ip.nimbleway.com:7000:account-krefeld_com_dlw9sv-pipeline-nimbleip:10mLu025Xsi9
+198.23.239.134:6540:btllzzio:u792csnqppxy
+207.244.217.165:6712:btllzzio:u792csnqppxy
+107.172.163.27:6543:btllzzio:u792csnqppxy
+64.137.42.112:5157:btllzzio:u792csnqppxy
+173.211.0.148:6641:btllzzio:u792csnqppxy
+161.123.152.115:6360:btllzzio:u792csnqppxy
+167.160.180.203:6754:btllzzio:u792csnqppxy
+154.36.110.199:6853:btllzzio:u792csnqppxy
+173.0.9.70:5653:btllzzio:u792csnqppxy
+173.0.9.209:5792:btllzzio:u792csnqppxy
